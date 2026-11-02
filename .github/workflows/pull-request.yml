@@ -200,3 +200,61 @@ jobs:
             name: horus-gui_OSX-Intel.zip
             path: dist/horus-gui_OSX-Intel.dmg
             retention-days: 2
+    build-linux:
+        runs-on: [ubuntu-22.04]
+
+        steps:
+
+        - name: Checkout code
+          uses: actions/checkout@v4
+
+        - uses: actions/setup-python@v5
+          with:
+            python-version: '3.11'
+            cache: 'pip'
+
+        - name: Install system dependencies
+          run: |
+            sudo apt-get update
+            sudo apt-get install -y \
+              portaudio19-dev \
+              libportaudio2 \
+              librtlsdr-dev \
+              librtlsdr0 \
+              libusb-1.0-0-dev \
+              libusb-1.0-0
+
+        - name: Install Python dependencies
+          run: |
+            python -m pip install --upgrade pip
+            pip install pyaudio
+            pip install horusdemodlib
+            pip install -r requirements.txt
+            pip install pyinstaller
+
+        - name: Run PyInstaller
+          run: pyinstaller horus-gui.spec
+
+        - name: Check native dependencies
+          run: |
+            if [ ! -x dist/horus-gui/horus-gui ]; then
+                echo "Linux executable not found!"
+                exit 1
+            fi
+
+            ldd_output=$(ldd dist/horus-gui/horus-gui)
+            echo "$ldd_output"
+
+            if echo "$ldd_output" | grep -q "not found"; then
+                echo "Missing native dependencies!"
+                exit 1
+            fi
+        - name: Create Linux archive
+          run: |
+            tar -czf dist/horus-gui_LINUX64.tar.gz -C dist horus-gui
+        - name: Upload Artifact
+          uses: actions/upload-artifact@v4
+          with:
+            name: horus-gui_LINUX64
+            path: dist/horus-gui_LINUX64.tar.gz
+            retention-days: 2
