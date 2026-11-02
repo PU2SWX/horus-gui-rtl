@@ -1,3 +1,29 @@
+# Horus GUI - RTL-SDR Edition
+
+**Independent modified version of Project Horus GUI**
+
+This repository is an independently maintained fork of
+[Project Horus GUI](https://github.com/projecthorus/horus-gui).
+
+### Modifications by PU2SWX
+
+- Added direct RTL-SDR receiver support.
+- Added RTL-SDR frequency and gain configuration.
+- Integrated RTL-SDR input into the existing demodulator.
+- Modified audio input handling.
+
+**Modified version date:** November 2, 2026.
+
+This is an unofficial version and is not affiliated with,
+endorsed by, or maintained by the Project Horus developers.
+
+This software is distributed under the
+GNU General Public License v3.0 (GPL-3.0).
+
+See the LICENSE file for the complete license terms.
+
+---
+
 # Project Horus Telemetry Decoder GUI
 
 Telemetry demodulator for the following modems in use by Project Horus
