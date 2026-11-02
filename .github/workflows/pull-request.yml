@@ -88,6 +88,31 @@ jobs:
                 Copy-Item (Join-Path $sourceDir $dll) .
             }
 
+        - name: Download official RTL-SDR Blog DLL
+          shell: pwsh
+          run: |
+            $zip = "$env:RUNNER_TEMP\rtl-sdr-release.zip"
+            $extract = "$env:RUNNER_TEMP\rtl-sdr-release"
+
+            Invoke-WebRequest `
+              -Uri "https://github.com/rtlsdrblog/rtl-sdr-blog/releases/latest/download/Release.zip" `
+              -OutFile $zip
+
+            Expand-Archive -Path $zip -DestinationPath $extract -Force
+
+            $dll = Join-Path $extract "x64\rtlsdr.dll"
+
+            if (-not (Test-Path $dll)) {
+                throw "Official x64 rtlsdr.dll not found in Release.zip"
+            }
+
+            New-Item -ItemType Directory -Force -Path build_dlls | Out-Null
+            Copy-Item $dll "build_dlls\rtlsdr.dll" -Force
+
+            Write-Host "RTL-SDR DLL copied successfully."
+
+
+
         - name: Run pyinstaller
           run: pyinstaller horus-gui_win.spec
 
