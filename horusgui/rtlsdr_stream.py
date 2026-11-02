@@ -8,6 +8,8 @@ import queue
 import threading
 import time
 import numpy as np
+import os
+import sys
 from scipy.signal import firwin, fftconvolve
 
 RTLSDR_DEVICE_NAME = "RTL-SDR (RTL2832U)"
@@ -108,6 +110,10 @@ class RTLSDRStream(object):
         sdr = None
         reader = None
         try:
+            if getattr(sys, "frozen", False):
+                dll_dir = getattr(sys, "_MEIPASS", None)
+                if dll_dir and not getattr(self, "_dll_directory_handle", None):
+                    self._dll_directory_handle = os.add_dll_directory(dll_dir)
             from rtlsdr import RtlSdr
 
             sdr = RtlSdr()

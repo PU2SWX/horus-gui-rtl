@@ -2,10 +2,23 @@
 
 block_cipher = None
 
+import os
+import sysconfig
 from PyInstaller.utils.hooks import collect_data_files
+
+scripts_dir = sysconfig.get_path("scripts")
+
+binaries = [
+    (os.path.join(scripts_dir, "rtlsdr.dll"), "."),
+    (os.path.join(scripts_dir, "libusb-1.0.dll"), "."),
+]
+
+for dll_path, _ in binaries:
+    if not os.path.isfile(dll_path):
+        raise FileNotFoundError("DLL nao encontrada: " + dll_path)
 a = Analysis(['horus-gui.py'],
              pathex=['.'],
-             binaries=[],
+             binaries=binaries,
              datas=collect_data_files("horusbinaryv3"),
              hiddenimports=['pkg_resources.py2_warn', '_cffi_backend'],
              hookspath=[],
