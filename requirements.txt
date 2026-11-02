@@ -1,4 +1,6 @@
 numpy<2.4.0
+scipy
+pyrtlsdr
 pyaudio
 PyQt6
 pyqtgraph

@@ -2,6 +2,7 @@
 import logging
 import pyaudio
 import time
+from .rtlsdr_stream import RTLSDR_DEVICE_NAME
 
 
 # Global PyAudio object
@@ -23,13 +24,15 @@ def init_audio(widgets):
     widgets["audioDeviceSelector"].clear()
     # Add in the 'dummy' GQRX UDP interface
     widgets["audioDeviceSelector"].addItem('UDP Audio (127.0.0.1:7355)')
-    
-    
+    # Add the built-in RTL-SDR (RTL2832U) receiver
+    widgets["audioDeviceSelector"].addItem(RTLSDR_DEVICE_NAME)
+
+
     # Get list of Host APIs
     _host_apis = []
     for y in range(0, pyAudio.get_host_api_count()):
         _hapi = pyAudio.get_host_api_info_by_index(y)['name']
-        
+
         # Shorten the Host API name a little.
         if 'Windows ' in _hapi:
             _host_apis.append(_hapi.replace("Windows ",""))
@@ -71,7 +74,14 @@ def populate_sample_rates(widgets):
     # Get information on current audio device
     _dev_name = widgets["audioDeviceSelector"].currentText()
 
-    
+
+    if _dev_name == RTLSDR_DEVICE_NAME:
+        # The RTL-SDR path demodulates internally, and always produces 48 kHz audio.
+        widgets["audioSampleRateSelector"].addItem(str(48000))
+        widgets["audioSampleRateSelector"].setCurrentIndex(0)
+
+        return
+
     if _dev_name == 'UDP Audio (127.0.0.1:7355)':
         # Add in fixed sample rate for GQRX/SDR++ input, which only outputs at 48 kHz.
         widgets["audioSampleRateSelector"].addItem(str(48000))
@@ -96,13 +106,13 @@ def populate_sample_rates(widgets):
             except ValueError:
                 # Why oh why do you throw an exception instead of returning FALSE pyaudio...
                 _valid = False
-            
+
             if _valid:
                 widgets["audioSampleRateSelector"].addItem(str(int(_rate)))
                 _valid_rates.append(str(int(_rate)))
 
         # Use 48 kHz sample rate if the sound card supports it.
-        if "48000" in _valid_rates: 
+        if "48000" in _valid_rates:
             widgets["audioSampleRateSelector"].setCurrentText("48000")
         else:
             # Otherwise use the default.
@@ -129,7 +139,7 @@ class AudioStream(object):
         self.audio_thread_running = True
 
         self.audio = pyaudio.PyAudio()
-        
+
     def start_stream(self, info_callback=None):
         if info_callback:
             self.stats_callback = info_callback
@@ -170,4 +180,4 @@ class AudioStream(object):
     def stop(self):
         """ Halt stream """
         self.audio_thread_running = False
-        self.stream.close()
+        self.stream.close()

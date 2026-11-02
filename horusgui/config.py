@@ -3,6 +3,7 @@
 #   Horus Telemetry GUI - Configuration
 #
 #   Mark Jessop <vk5qi@rfhead.net>
+#   + RTL-SDR fields + save-safe version handling
 #
 import json
 import logging
@@ -39,6 +40,10 @@ default_config = {
     "log_format": "CSV",
     "log_directory": "",
     "fft_smoothing": False,
+    # RTL-SDR
+    "rtl_freq": "430.430",
+    "rtl_gain": "auto",
+    "rtl_ppm": "0",
     "payload_list": json.dumps(horusdemodlib.payloads.HORUS_PAYLOAD_LIST),
     "custom_field_list": json.dumps({})
 }
@@ -66,9 +71,9 @@ def write_config():
     """ Write global settings into QSettings """
     global default_config, qt_settings
 
-    # Write all settings
     for _setting in default_config:
         qt_settings.setValue(_setting, default_config[_setting])
+    qt_settings.sync()
     
     logging.info("Current configuration saved.")
 
@@ -77,22 +82,52 @@ def read_config(widgets):
     """ Read in configuration settings from Qt """
     global qt_settings, default_config
 
-    # This is getting a bit ridiculous, need to re-think this approach.
-    OK_VERSIONS = [__version__, '0.6.1', '0.6.0', '0.5.0-beta1', '0.4.2', '0.4.1', '0.4.0', '0.3.19', '0.3.18', '0.3.17', '0.3.16', '0.3.15', '0.3.14', '0.3.13', '0.3.12', '0.3.11', '0.3.10', '0.3.9', '0.3.8', '0.3.7', '0.3.6', '0.3.5', '0.3.4', '0.3.1', '0.2.1']
+    OK_VERSIONS = [
+        __version__,
+        '0.6.1.1', '0.6.1', '0.6.0', '0.5.0-beta1',
+        '0.4.2', '0.4.1', '0.4.0',
+        '0.3.19', '0.3.18', '0.3.17', '0.3.16', '0.3.15', '0.3.14',
+        '0.3.13', '0.3.12', '0.3.11', '0.3.10', '0.3.9', '0.3.8',
+        '0.3.7', '0.3.6', '0.3.5', '0.3.4', '0.3.1', '0.2.1',
+    ]
     
-    # Try and read in the version parameter from QSettings
-    if qt_settings.value("version") not in OK_VERSIONS:
-        logging.debug("Configuration out of date, clearing and overwriting.")
+    stored_keys = set(qt_settings.allKeys())
+    stored = qt_settings.value("version")
+
+    if not stored_keys:
+        logging.info("No saved configuration found - writing defaults.")
         write_config()
+        stored_keys = set(qt_settings.allKeys())
+
+    elif stored is None:
+        logging.warning(
+            "Saved configuration has no version tag. "
+            "Preserving existing values."
+        )
+        qt_settings.setValue("version", __version__)
+        qt_settings.sync()
+        stored_keys.add("version")
+
+    elif stored not in OK_VERSIONS:
+        logging.warning(
+            "Config version %r unknown - keeping saved values, updating version tag.",
+            stored,
+        )
+        qt_settings.setValue("version", __version__)
+        qt_settings.sync()
 
     for _setting in default_config:
         try:
-            _new_setting = qt_settings.value(_setting)
-            if _new_setting is not None:
-                default_config[_setting] = _new_setting
+            if _setting in stored_keys:
+                _new_setting = qt_settings.value(_setting)
+                if _new_setting is not None:
+                    default_config[_setting] = _new_setting
+            else:
+                qt_settings.setValue(_setting, default_config[_setting])
         except Exception as e:
-            logging.debug("Missing config setting: " + _setting)
+            logging.debug("Missing config setting: %s", e)
 
+    qt_settings.sync()
     if widgets:
         # Habitat Settings
         widgets["sondehubUploadSelector"].setChecked(ValueToBool(default_config["habitat_upload_enabled"]))
@@ -110,16 +145,11 @@ def read_config(widgets):
         widgets["ozimuxUDPEntry"].setText(str(default_config["ozimux_udp_port"]))
 
         # Try and set the audio device.
-        # If the audio device is not in the available list of devices, this will fail silently.
         widgets["audioDeviceSelector"].setCurrentText(default_config["audio_device"])
-        # Populate the list of valid sample rates
         populate_sample_rates(widgets)
-        # Attempt to set the configured sample rate. This will fail silently if it does not exist.
         widgets["audioSampleRateSelector"].setCurrentText(str(default_config["audio_sample_rate"]))
 
-        # Try and set the modem. If the modem is not valid, this will fail silently.
         widgets["horusModemSelector"].setCurrentText(default_config["modem"])
-        # Populate the default settings.
         populate_modem_settings(widgets)
 
         # Rotator Settings
@@ -136,66 +166,89 @@ def read_config(widgets):
         widgets["fftSmoothingSelector"].setChecked(ValueToBool(default_config["fft_smoothing"]))
 
         if default_config['baud_rate'] != -1:
-            widgets["horusModemRateSelector"].setCurrentText(str(default_config['baud_rate']))
+            try:
+                widgets["horusModemRateSelector"].setCurrentText(str(default_config['baud_rate']))
+            except Exception:
+                pass
+
+        # RTL-SDR
+        if "rtlFreqEntry" in widgets:
+            widgets["rtlFreqEntry"].setText(str(default_config.get("rtl_freq", "430.430")))
+        if "rtlGainEntry" in widgets:
+            widgets["rtlGainEntry"].setText(str(default_config.get("rtl_gain", "auto")))
+        if "rtlPpmEntry" in widgets:
+            widgets["rtlPpmEntry"].setText(str(default_config.get("rtl_ppm", "0")))
 
 
     if 'payload_list' in default_config:
-        _payloads = json.loads(default_config['payload_list'])
-        # JSON converts the int dictionary keys into strings... annoying!
-        _temp = {}
-        for _key in _payloads:
-            _temp[int(_key)] = _payloads[_key]
-        
-        default_config['payload_list'] = _temp
-
-
-
+        try:
+            _payloads = default_config['payload_list']
+            if isinstance(_payloads, str):
+                _payloads = json.loads(_payloads)
+            _temp = {}
+            for _key in _payloads:
+                _temp[int(_key)] = _payloads[_key]
+            default_config['payload_list'] = _temp
+        except Exception as e:
+            logging.debug("payload_list parse: %s", e)
 
 
 def save_config(widgets):
-    """ Write out settings to a config file """
+    """ Write out settings to QSettings """
     global default_config
 
     if widgets:
-        default_config["habitat_upload_enabled"] = widgets[
-            "sondehubUploadSelector"
-        ].isChecked()
-        default_config["version"] = __version__
-        default_config["habitat_call"] = widgets["userCallEntry"].text()
-        default_config["habitat_lat"] = float(widgets["userLatEntry"].text())
-        default_config["habitat_lon"] = float(widgets["userLonEntry"].text())
-        default_config["habitat_alt"] = float(widgets["userAltEntry"].text())
-        default_config["habitat_antenna"] = widgets["userAntennaEntry"].text()
-        default_config["habitat_radio"] = widgets["userRadioEntry"].text()
-        default_config["horus_udp_enabled"] = widgets["horusUploadSelector"].isChecked()
-        default_config["horus_udp_port"] = int(widgets["horusUDPEntry"].text())
-        default_config["ozimux_enabled"] = widgets["ozimuxUploadSelector"].isChecked()
-        default_config["ozimux_udp_port"] = int(widgets["ozimuxUDPEntry"].text())
-        default_config["audio_device"] = widgets["audioDeviceSelector"].currentText()
-        default_config["audio_sample_rate"] = widgets["audioSampleRateSelector"].currentText()
-        default_config["modem"] = widgets["horusModemSelector"].currentText()
-        default_config["baud_rate"] = int(widgets["horusModemRateSelector"].currentText())
-        default_config["rotator_type"] = widgets["rotatorTypeSelector"].currentText()
-        default_config["rotator_host"] = widgets["rotatorHostEntry"].text()
-        default_config["rotator_port"] = int(widgets["rotatorPortEntry"].text())
-        default_config["rotator_rangeinhibit"] = widgets["rotatorRangeInhibit"].isChecked()
-        default_config["logging_enabled"] = widgets["enableLoggingSelector"].isChecked()
-        default_config["log_directory"] = widgets["loggingPathEntry"].text()
-        default_config["log_format"] = widgets["loggingFormatSelector"].currentText()
-        default_config["fft_smoothing"] = widgets["fftSmoothingSelector"].isChecked()
+        try:
+            default_config["habitat_upload_enabled"] = widgets[
+                "sondehubUploadSelector"
+            ].isChecked()
+            default_config["version"] = __version__
+            default_config["habitat_call"] = widgets["userCallEntry"].text()
+            default_config["habitat_lat"] = float(widgets["userLatEntry"].text() or 0)
+            default_config["habitat_lon"] = float(widgets["userLonEntry"].text() or 0)
+            default_config["habitat_alt"] = float(widgets["userAltEntry"].text() or 0)
+            default_config["habitat_antenna"] = widgets["userAntennaEntry"].text()
+            default_config["habitat_radio"] = widgets["userRadioEntry"].text()
+            default_config["horus_udp_enabled"] = widgets["horusUploadSelector"].isChecked()
+            default_config["horus_udp_port"] = int(widgets["horusUDPEntry"].text() or 55672)
+            default_config["ozimux_enabled"] = widgets["ozimuxUploadSelector"].isChecked()
+            default_config["ozimux_udp_port"] = int(widgets["ozimuxUDPEntry"].text() or 55683)
+            default_config["audio_device"] = widgets["audioDeviceSelector"].currentText()
+            default_config["audio_sample_rate"] = widgets["audioSampleRateSelector"].currentText()
+            default_config["modem"] = widgets["horusModemSelector"].currentText()
+            try:
+                default_config["baud_rate"] = int(widgets["horusModemRateSelector"].currentText())
+            except Exception:
+                default_config["baud_rate"] = -1
+            default_config["rotator_type"] = widgets["rotatorTypeSelector"].currentText()
+            default_config["rotator_host"] = widgets["rotatorHostEntry"].text()
+            default_config["rotator_port"] = int(widgets["rotatorPortEntry"].text() or 4533)
+            default_config["rotator_rangeinhibit"] = widgets["rotatorRangeInhibit"].isChecked()
+            default_config["logging_enabled"] = widgets["enableLoggingSelector"].isChecked()
+            default_config["log_directory"] = widgets["loggingPathEntry"].text()
+            default_config["log_format"] = widgets["loggingFormatSelector"].currentText()
+            default_config["fft_smoothing"] = widgets["fftSmoothingSelector"].isChecked()
 
-        default_config["payload_list"] = json.dumps(horusdemodlib.payloads.HORUS_PAYLOAD_LIST)
-        default_config["custom_field_list"] = json.dumps(horusdemodlib.payloads.HORUS_CUSTOM_FIELDS)
+            # RTL-SDR
+            if "rtlFreqEntry" in widgets:
+                default_config["rtl_freq"] = widgets["rtlFreqEntry"].text().strip()
+            if "rtlGainEntry" in widgets:
+                default_config["rtl_gain"] = widgets["rtlGainEntry"].text().strip()
+            if "rtlPpmEntry" in widgets:
+                default_config["rtl_ppm"] = widgets["rtlPpmEntry"].text().strip()
 
-        # Write out to config file
-        write_config()
+            default_config["payload_list"] = json.dumps(horusdemodlib.payloads.HORUS_PAYLOAD_LIST)
+            default_config["custom_field_list"] = json.dumps(horusdemodlib.payloads.HORUS_CUSTOM_FIELDS)
+
+            write_config()
+        except Exception as e:
+            logging.error("save_config failed: %s", e)
 
 
 def init_payloads(payload_id_list=None, custom_field_list=None):
     """ Attempt to download the latest payload / config data, and update local configs """
     global default_config
 
-    # Attempt to grab the payload list.
     if payload_id_list is None:
         _payload_list = download_latest_payload_id_list(timeout=3)
     else:
@@ -203,7 +256,6 @@ def init_payloads(payload_id_list=None, custom_field_list=None):
         _payload_list = read_payload_list(payload_id_list)
 
     if _payload_list:
-        # Sanity check the result
         if 0 in _payload_list:
             horusdemodlib.payloads.HORUS_PAYLOAD_LIST = _payload_list
             logging.info(f"Updated Payload List Successfuly!")
@@ -211,7 +263,6 @@ def init_payloads(payload_id_list=None, custom_field_list=None):
             logging.critical("Could not read payload list!")
     else:
         if 'payload_list' in default_config:
-            # Maybe we have a stored config we can use.
             try:
                 _payload_list = default_config['payload_list']
                 if 0 in _payload_list:
@@ -233,7 +284,6 @@ def init_payloads(payload_id_list=None, custom_field_list=None):
         _custom_fields = read_custom_field_list(custom_field_list)
 
     if _custom_fields:
-        # Sanity Check
         if '4FSKTEST-V2' in _custom_fields:
             horusdemodlib.payloads.HORUS_CUSTOM_FIELDS = _custom_fields
             logging.info(f"Updated Custom Field List Successfuly!")
@@ -241,7 +291,6 @@ def init_payloads(payload_id_list=None, custom_field_list=None):
             logging.critical("Could not read custom field list!")
     else:
         if 'custom_field_list' in default_config:
-            # Maybe we have a stored config we can use.
             try:
                 _custom_fields = json.loads(default_config['custom_field_list'])
                 if '4FSKTEST-V2' in _custom_fields:
@@ -257,11 +306,8 @@ def init_payloads(payload_id_list=None, custom_field_list=None):
     logging.info(f"Custom Field list contains {len(list(horusdemodlib.payloads.HORUS_CUSTOM_FIELDS.keys()))} entries.")
 
 
-
-
 if __name__ == "__main__":
     import sys
-    # Setup Logging
     logging.basicConfig(
         format="%(asctime)s %(levelname)s: %(message)s", level=logging.DEBUG
     )

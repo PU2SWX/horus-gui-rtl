@@ -11,6 +11,8 @@ PyQt6 = "^6.7.0"
 pyqtgraph = "^0.12.3"
 pyaudio = "^0.2.11"
 horusdemodlib = ">=0.6.1"
+scipy = "*"
+pyrtlsdr = "*"
 
 [tool.poetry.dev-dependencies]
 
@@ -33,6 +35,8 @@ dependencies = [
     "audioop-lts; python_version>='3.13'",
     "horusdemodlib>=0.6.1",
     "numpy<2.4.0",
+    "scipy",
+    "pyrtlsdr",
     "pyaudio",
     "pyqtgraph",
     "requests",

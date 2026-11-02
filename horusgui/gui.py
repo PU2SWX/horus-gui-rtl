@@ -29,6 +29,7 @@ from pyqtgraph.dockarea import *
 from .widgets import *
 from .audio import *
 from .udpaudio import *
+from .rtlsdr_stream import *
 from .fft import *
 from .modem import *
 from .config import *
@@ -156,21 +157,18 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"Horus Telemetry GUI - v{__version__}")
         self.setWindowIcon(getHorusIcon())
 
-        palette = self.palette()
-        bg_color = palette.color(QPalette.ColorRole.Window)
-        fg_color   = palette.color(QPalette.ColorRole.WindowText)
-        axis_color = palette.color(QPalette.ColorRole.Text)
-        marker_color = palette.color(QPalette.ColorRole.PlaceholderText)
-        pg.setConfigOption('background', bg_color)
-        pg.setConfigOption('foreground', fg_color)
-
+        # Tema Futurista / HUD Sci-Fi nos gráficos
+        pg.setConfigOption('background', QColor(8, 12, 22))
+        pg.setConfigOption('foreground', QColor(0, 220, 255))
+        axis_color = QColor(0, 220, 255)       # ciano elétrico
+        marker_color = QColor(180, 80, 255)    # violeta neon
         # Left Column VBox
         left_column = QVBoxLayout()
 
         # Controls
         w1_audio_groupbox = QGroupBox('Audio')
         w1_audio_groupbox.setObjectName("b1")
-        w1_audio_groupbox.setStyleSheet('QWidget#b1 { font-size: 15px; font-weight: bold}')
+        w1_audio_groupbox.setStyleSheet('QGroupBox#b1 { font-size: 13px; font-weight: 600; color: #00DCFF; }')
         w1_audio = QGridLayout(w1_audio_groupbox)
 
         # Audio Parameters
@@ -193,12 +191,36 @@ class MainWindow(QMainWindow):
         w1_audio.addWidget(self.widgets["audioSampleRateSelector"], 2, 1, 1, 2)
         w1_audio.addWidget(self.widgets["audioDbfsLabel"], 3, 0, 1, 1)
         w1_audio.addWidget(self.widgets["audioDbfsValue"], 3, 1, 1, 2)
+
+        # RTL-SDR settings, in a single compact row (only enabled when the RTL-SDR input is selected)
+        self.widgets["rtlFreqLabel"] = QLabel("<b>MHz</b>")
+        self.widgets["rtlFreqEntry"] = QLineEdit("430.430")
+        self.widgets["rtlFreqEntry"].setMaximumWidth(90)
+        self.widgets["rtlFreqEntry"].setToolTip(
+            "RTL-SDR dial frequency in MHz (USB), as you would set it in GQRX/SDR++.\n"
+            "The payload tones must end up between ~100 Hz and 4 kHz of audio."
+        )
+        self.widgets["rtlGainLabel"] = QLabel("<b>Gain</b>")
+        self.widgets["rtlGainEntry"] = QLineEdit("auto")
+        self.widgets["rtlGainEntry"].setMaximumWidth(55)
+        self.widgets["rtlGainEntry"].setToolTip("RTL-SDR gain in dB, or 'auto'.")
+        self.widgets["rtlPpmLabel"] = QLabel("<b>PPM</b>")
+        self.widgets["rtlPpmEntry"] = QLineEdit("0")
+        self.widgets["rtlPpmEntry"].setMaximumWidth(45)
+        self.widgets["rtlPpmEntry"].setToolTip("RTL-SDR frequency correction in PPM (integer).")
+
+        _rtl_row = QHBoxLayout()
+        _rtl_row.setContentsMargins(0, 0, 0, 0)
+        for _w in ("rtlFreqLabel", "rtlFreqEntry", "rtlGainLabel", "rtlGainEntry", "rtlPpmLabel", "rtlPpmEntry"):
+            _rtl_row.addWidget(self.widgets[_w])
+        _rtl_row.addStretch(1)
+        w1_audio.addLayout(_rtl_row, 4, 0, 1, 3)
         w1_audio_groupbox.setLayout(w1_audio)
 
         # Modem Parameters
         w1_modem_groupbox = QGroupBox('Modem')
         w1_modem_groupbox.setObjectName("b1")
-        w1_modem_groupbox.setStyleSheet('QWidget#b1 { font-size: 15px; font-weight: bold}')
+        w1_modem_groupbox.setStyleSheet('QGroupBox#b1 { font-size: 13px; font-weight: 600; color: #00DCFF; }')
         w1_modem = QGridLayout(w1_modem_groupbox)
 
         self.widgets["horusModemLabel"] = QLabel("<b>Mode:</b>")
@@ -493,10 +515,18 @@ class MainWindow(QMainWindow):
         w1_tab_widget = QTabWidget()
         w1_tab_widget.setTabPosition(QTabWidget.TabPosition.North)
         w1_tab_widget.tabBar().setExpanding(True)
-        w1_tab_widget.addTab(w1_habitat_widget, "SondeHub")
-        w1_tab_widget.addTab(w1_other_widget, "Other")
-        w1_tab_widget.addTab(w1_rotator_widget, "Rotator")
-        w1_tab_widget.setStyleSheet("QTabBar {font: bold 14px;}")
+        # Each tab page sits in a scroll area, so a small screen gets scrollbars instead of squeezed widgets.
+        def _scrollable(_page):
+            _sa = QScrollArea()
+            _sa.setWidgetResizable(True)
+            _sa.setFrameShape(QFrame.Shape.NoFrame)
+            _sa.setWidget(_page)
+            return _sa
+
+        w1_tab_widget.addTab(_scrollable(w1_habitat_widget), "SondeHub")
+        w1_tab_widget.addTab(_scrollable(w1_other_widget), "Other")
+        w1_tab_widget.addTab(_scrollable(w1_rotator_widget), "Rotator")
+        w1_tab_widget.setStyleSheet("QTabBar { font: 600 13px; color: #00DCFF; }")
 
         # Add widgets to left column
         left_column.addWidget(w1_audio_groupbox) #, 0, 0, 1, 1)
@@ -555,7 +585,7 @@ class MainWindow(QMainWindow):
 
         w2_spectrum_groupbox = QGroupBox("Spectrum")
         w2_spectrum_groupbox.setObjectName("b1")
-        w2_spectrum_groupbox.setStyleSheet('QWidget#b1 { font-size: 15px; font-weight: bold}')
+        w2_spectrum_groupbox.setStyleSheet('QGroupBox#b1 { font-size: 13px; font-weight: 600; color: #00DCFF; }')
         spectrum = QGridLayout(w2_spectrum_groupbox)
         spectrum.addWidget(self.widgets["spectrumPlot"])
 
@@ -563,7 +593,7 @@ class MainWindow(QMainWindow):
 
         w3_stats_groupbox = QGroupBox("SNR (dB)")
         w3_stats_groupbox.setObjectName("b1")
-        w3_stats_groupbox.setStyleSheet('QWidget#b1 { font-size: 15px; font-weight: bold}')
+        w3_stats_groupbox.setStyleSheet('QGroupBox#b1 { font-size: 13px; font-weight: 600; color: #00DCFF; }')
         w3_stats = QGridLayout(w3_stats_groupbox)
         self.widgets["snrBar"] = QProgressBar()
         self.widgets["snrBar"].setOrientation(QtCore.Qt.Orientation.Vertical)
@@ -585,7 +615,7 @@ class MainWindow(QMainWindow):
         # SNR Plot
         w3_snr_groupbox = QGroupBox("SNR Plot")
         w3_snr_groupbox.setObjectName("b1")
-        w3_snr_groupbox.setStyleSheet('QWidget#b1 { font-size: 15px; font-weight: bold}')
+        w3_snr_groupbox.setStyleSheet('QGroupBox#b1 { font-size: 13px; font-weight: 600; color: #00DCFF; }')
         w3_snr = QGridLayout(w3_snr_groupbox)
         self.widgets["snrPlot"] = pg.PlotWidget(title="SNR")
         self.widgets["snrPlot"].setLabel("left", "SNR (dB)")
@@ -613,7 +643,7 @@ class MainWindow(QMainWindow):
         # Telemetry Data
         w4_data_groupbox = QGroupBox("Data")
         w4_data_groupbox.setObjectName("b1")
-        w4_data_groupbox.setStyleSheet('QWidget#b1 { font-size: 15px; font-weight: bold}')
+        w4_data_groupbox.setStyleSheet('QGroupBox#b1 { font-size: 13px; font-weight: 600; color: #00DCFF; }')
         w4_data = QGridLayout(w4_data_groupbox)
         self.widgets["latestRawSentenceLabel"] = QLabel("<b>Latest Packet (Raw):</b>")
         self.widgets["latestRawSentenceData"] = QLineEdit("NO DATA")
@@ -634,7 +664,7 @@ class MainWindow(QMainWindow):
 
         w4_position_groupbox = QGroupBox("Position")
         w4_position_groupbox.setObjectName("b1")
-        w4_position_groupbox.setStyleSheet('QWidget#b1 { font-size: 15px; font-weight: bold}')
+        w4_position_groupbox.setStyleSheet('QGroupBox#b1 { font-size: 13px; font-weight: 600; color: #00DCFF; }')
         w4_position = QGridLayout(w4_position_groupbox)
 
         self.widgets["latestPacketCallsignLabel"] = QLabel("<b>Callsign</b>")
@@ -684,7 +714,7 @@ class MainWindow(QMainWindow):
 
         w5_telemetry_groupbox = QGroupBox("Telemetry")
         w5_telemetry_groupbox.setObjectName("b1")
-        w5_telemetry_groupbox.setStyleSheet('QWidget#b1 { font-size: 15px; font-weight: bold}')
+        w5_telemetry_groupbox.setStyleSheet('QGroupBox#b1 { font-size: 13px; font-weight: 600; color: #00DCFF; }')
         self.w5_telemetry = QGridLayout(w5_telemetry_groupbox)
         w5_telemetry_groupbox.setLayout(self.w5_telemetry)
 
@@ -739,7 +769,7 @@ class MainWindow(QMainWindow):
 
         w6_groupbox = QGroupBox("Log")
         w6_groupbox.setObjectName("b1")
-        w6_groupbox.setStyleSheet('QWidget#b1 { font-size: 15px; font-weight: bold}')
+        w6_groupbox.setStyleSheet('QGroupBox#b1 { font-size: 13px; font-weight: 600; color: #00DCFF; }')
         w6 = QGridLayout(w6_groupbox)
         self.widgets["console"] = QPlainTextEdit()
         self.widgets["console"].setReadOnly(True)
@@ -790,7 +820,9 @@ class MainWindow(QMainWindow):
 
         # Resize window to final resolution, and display.
         logging.info("Starting GUI.")
-        self.resize(1500, self.minimumSize().height())
+        # Never ask for more height than the screen offers (leave room for the title bar and window frame).
+        _avail_h = QGuiApplication.primaryScreen().availableGeometry().height() - 50
+        self.resize(1500, min(max(self.minimumSize().height(), 800), _avail_h))
 
         self.post_initialize()
 
@@ -847,7 +879,11 @@ class MainWindow(QMainWindow):
 
     def cleanup(self):
         self.running = False
-
+        try:
+            save_config(self.widgets)
+            logging.info("Settings saved on exit.")
+        except Exception as e:
+            logging.error("Could not save settings on exit: %s", e)
         try:
             if self.horus_modem:
                 self.horus_modem.close()
@@ -886,6 +922,11 @@ class MainWindow(QMainWindow):
         """ Update the sample-rate dropdown when a different audio device is selected.  """
         # Pass widgets straight on to function from .audio
         populate_sample_rates(self.widgets)
+
+        # RTL-SDR settings are only relevant for the RTL-SDR input.
+        _rtl = self.widgets["audioDeviceSelector"].currentText() == RTLSDR_DEVICE_NAME
+        for _w in ("rtlFreqEntry", "rtlGainEntry", "rtlPpmEntry"):
+            self.widgets[_w].setEnabled(_rtl)
 
 
     def update_modem_settings(self):
@@ -1363,11 +1404,11 @@ class MainWindow(QMainWindow):
             self.widgets['latestDecodedAgeData'].setText("No packet yet!")
             # Grab settings off widgets
             _dev_name = self.widgets["audioDeviceSelector"].currentText()
-            if _dev_name != 'UDP Audio (127.0.0.1:7355)':
+            if _dev_name not in ('UDP Audio (127.0.0.1:7355)', RTLSDR_DEVICE_NAME):
                 _sample_rate = int(self.widgets["audioSampleRateSelector"].currentText())
                 _dev_index = self.audio_devices[_dev_name]["index"]
             else:
-                # Override sample rate for GQRX UDP input.
+                # Override sample rate for GQRX UDP input, and the built-in RTL-SDR.
                 _sample_rate = 48000
 
             # Grab Horus Settings
@@ -1458,7 +1499,33 @@ class MainWindow(QMainWindow):
                 worker = Worker(self.audio_stream.udp_listen_thread)
                 worker.signals.info.connect(self.handle_status_update)
                 self.threadpool.start(worker)
-            
+
+            elif _dev_name == RTLSDR_DEVICE_NAME:
+                try:
+                    _rtl_freq = float(self.widgets["rtlFreqEntry"].text()) * 1e6
+                    _rtl_ppm = int(self.widgets["rtlPpmEntry"].text())
+                    _rtl_gain_text = self.widgets["rtlGainEntry"].text().strip().lower()
+                    _rtl_gain = "auto" if _rtl_gain_text == "auto" else float(_rtl_gain_text)
+                except ValueError:
+                    logging.error("RTL-SDR - Invalid frequency, gain or PPM value.")
+                    self.fft_process.stop()
+                    self.horus_modem.close()
+                    self.horus_modem = None
+                    return
+
+                self.audio_stream = RTLSDRStream(
+                    frequency_hz=_rtl_freq,
+                    gain=_rtl_gain,
+                    ppm=_rtl_ppm,
+                    block_size=self.fft_process.stride,
+                    fft_input=self.fft_process.add_samples,
+                    modem=self.horus_modem,
+                )
+
+                # Create RTL-SDR worker thread
+                worker = Worker(self.audio_stream.start_stream)
+                worker.signals.info.connect(self.handle_status_update)
+                self.threadpool.start(worker)
 
             else:
                 self.audio_stream = AudioStream(
@@ -1489,6 +1556,8 @@ class MainWindow(QMainWindow):
             # Grey out some selectors, so the user cannot adjust them while we are decoding.
             self.widgets["audioDeviceSelector"].setEnabled(False)
             self.widgets["audioSampleRateSelector"].setEnabled(False)
+            for _w in ("rtlFreqEntry", "rtlGainEntry", "rtlPpmEntry"):
+                self.widgets[_w].setEnabled(False)
             self.widgets["horusModemSelector"].setEnabled(False)
             self.widgets["horusModemRateSelector"].setEnabled(False)
             self.widgets["horusMaskEstimatorSelector"].setEnabled(False) # This should really be editable while running.
@@ -1520,6 +1589,9 @@ class MainWindow(QMainWindow):
             # Re-Activate selectors.
             self.widgets["audioDeviceSelector"].setEnabled(True)
             self.widgets["audioSampleRateSelector"].setEnabled(True)
+            _rtl = self.widgets["audioDeviceSelector"].currentText() == RTLSDR_DEVICE_NAME
+            for _w in ("rtlFreqEntry", "rtlGainEntry", "rtlPpmEntry"):
+                self.widgets[_w].setEnabled(_rtl)
             self.widgets["horusModemSelector"].setEnabled(True)
             self.widgets["horusModemRateSelector"].setEnabled(True)
             self.widgets["horusMaskEstimatorSelector"].setEnabled(True)
@@ -1649,15 +1721,237 @@ class ConsoleHandler(logging.Handler):
 # Main
 def main():
     app = QApplication(sys.argv)
+
+    # === TEMA FUTURISTA / HUD SCI-FI ===
+    app.setStyle("Fusion")
+
+    # Cores base
+    BG_DARK     = QColor(8, 12, 22)       # fundo principal quase preto-azulado
+    BG_PANEL    = QColor(12, 18, 32)      # painéis
+    BG_INPUT    = QColor(6, 10, 20)       # campos de entrada
+    CYAN        = QColor(0, 220, 255)     # ciano principal
+    CYAN_DIM    = QColor(0, 160, 200)     # ciano mais suave
+    VIOLET      = QColor(160, 70, 255)    # violeta neon
+    TEXT        = QColor(200, 240, 255)   # texto claro
+    TEXT_DIM    = QColor(120, 160, 190)
+
+    palette = QPalette()
+    palette.setColor(QPalette.ColorRole.Window,          BG_DARK)
+    palette.setColor(QPalette.ColorRole.WindowText,      TEXT)
+    palette.setColor(QPalette.ColorRole.Base,            BG_INPUT)
+    palette.setColor(QPalette.ColorRole.AlternateBase,   BG_PANEL)
+    palette.setColor(QPalette.ColorRole.Text,            TEXT)
+    palette.setColor(QPalette.ColorRole.Button,          BG_PANEL)
+    palette.setColor(QPalette.ColorRole.ButtonText,      CYAN)
+    palette.setColor(QPalette.ColorRole.Highlight,       CYAN_DIM)
+    palette.setColor(QPalette.ColorRole.HighlightedText, BG_DARK)
+    palette.setColor(QPalette.ColorRole.ToolTipBase,     BG_PANEL)
+    palette.setColor(QPalette.ColorRole.ToolTipText,     TEXT)
+    palette.setColor(QPalette.ColorRole.PlaceholderText, TEXT_DIM)
+    palette.setColor(QPalette.ColorRole.Light,           CYAN)
+    palette.setColor(QPalette.ColorRole.Mid,             CYAN_DIM)
+    palette.setColor(QPalette.ColorRole.Dark,            BG_DARK)
+
+    app.setPalette(palette)
+
+    app.setStyleSheet("""
+        /* ===== BASE ===== */
+        QWidget {
+            background-color: #080C16;
+            color: #C8F0FF;
+            font-family: "Segoe UI", "Roboto", "Helvetica Neue", sans-serif;
+            font-size: 12px;
+        }
+
+        /* ===== GROUPBOX (painéis) ===== */
+        QGroupBox {
+            background-color: #0C1220;
+            border: 1px solid #00A8C8;
+            border-radius: 6px;
+            margin-top: 12px;
+            padding-top: 8px;
+            font-weight: bold;
+        }
+        QGroupBox::title {
+            subcontrol-origin: margin;
+            subcontrol-position: top left;
+            left: 12px;
+            padding: 0 6px;
+            color: #00DCFF;
+            background-color: #080C16;
+        }
+
+        /* ===== BOTÕES ===== */
+        QPushButton {
+            background-color: #0A1525;
+            border: 1px solid #00A8C8;
+            border-radius: 4px;
+            color: #00DCFF;
+            padding: 5px 14px;
+            font-weight: 600;
+            min-height: 18px;
+        }
+        QPushButton:hover {
+            background-color: #0E1F35;
+            border: 1px solid #00DCFF;
+            color: #FFFFFF;
+        }
+        QPushButton:pressed {
+            background-color: #00DCFF;
+            color: #080C16;
+            border: 1px solid #00DCFF;
+        }
+        QPushButton:disabled {
+            background-color: #0A1018;
+            border: 1px solid #1A3040;
+            color: #3A5A6A;
+        }
+
+        /* ===== CAMPOS DE TEXTO / COMBO ===== */
+        QLineEdit, QComboBox, QSpinBox, QPlainTextEdit {
+            background-color: #060A14;
+            border: 1px solid #1A3A4A;
+            border-radius: 4px;
+            color: #C8F0FF;
+            padding: 3px 6px;
+            selection-background-color: #00A8C8;
+            selection-color: #080C16;
+        }
+        QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QPlainTextEdit:focus {
+            border: 1px solid #00DCFF;
+        }
+        QComboBox::drop-down {
+            border: none;
+            width: 20px;
+        }
+        QComboBox::down-arrow {
+            image: none;
+            border-left: 4px solid transparent;
+            border-right: 4px solid transparent;
+            border-top: 5px solid #00A8C8;
+            margin-right: 6px;
+        }
+        QComboBox QAbstractItemView {
+            background-color: #0C1220;
+            border: 1px solid #00A8C8;
+            selection-background-color: #00A8C8;
+            selection-color: #080C16;
+            color: #C8F0FF;
+        }
+
+        /* ===== CHECKBOX ===== */
+        QCheckBox {
+            color: #C8F0FF;
+            spacing: 6px;
+        }
+        QCheckBox::indicator {
+            width: 14px;
+            height: 14px;
+            border: 1px solid #00A8C8;
+            border-radius: 3px;
+            background-color: #060A14;
+        }
+        QCheckBox::indicator:checked {
+            background-color: #00DCFF;
+            border: 1px solid #00DCFF;
+        }
+        QCheckBox::indicator:hover {
+            border: 1px solid #00DCFF;
+        }
+
+        /* ===== LABELS ===== */
+        QLabel {
+            color: #C8F0FF;
+            background: transparent;
+        }
+
+        /* ===== TABS ===== */
+        QTabWidget::pane {
+            border: 1px solid #1A3A4A;
+            border-radius: 4px;
+            background-color: #0C1220;
+            top: -1px;
+        }
+        QTabBar::tab {
+            background-color: #0A1018;
+            color: #5A8A9A;
+            border: 1px solid #1A3A4A;
+            border-bottom: none;
+            border-top-left-radius: 4px;
+            border-top-right-radius: 4px;
+            padding: 6px 16px;
+            margin-right: 2px;
+            font-weight: 600;
+        }
+        QTabBar::tab:selected {
+            background-color: #0C1220;
+            color: #00DCFF;
+            border: 1px solid #00A8C8;
+            border-bottom: 1px solid #0C1220;
+        }
+        QTabBar::tab:hover:!selected {
+            color: #00DCFF;
+            background-color: #0E1A28;
+        }
+
+        /* ===== PROGRESS BAR (SNR) ===== */
+        QProgressBar {
+            background-color: #060A14;
+            border: 1px solid #1A3A4A;
+            border-radius: 3px;
+            text-align: center;
+        }
+        QProgressBar::chunk {
+            background-color: qlineargradient(
+                x1:0, y1:0, x2:0, y2:1,
+                stop:0 #00DCFF, stop:1 #0080A0
+            );
+            border-radius: 2px;
+        }
+
+        /* ===== SCROLLBAR ===== */
+        QScrollBar:vertical {
+            background: #080C16;
+            width: 10px;
+            margin: 0;
+        }
+        QScrollBar::handle:vertical {
+            background: #1A3A4A;
+            border-radius: 4px;
+            min-height: 30px;
+        }
+        QScrollBar::handle:vertical:hover {
+            background: #00A8C8;
+        }
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+            height: 0;
+        }
+
+        /* ===== SPLITTER ===== */
+        QSplitter::handle {
+            background-color: #1A3A4A;
+            width: 2px;
+        }
+        QSplitter::handle:hover {
+            background-color: #00A8C8;
+        }
+
+        /* ===== TOOLTIP ===== */
+        QToolTip {
+            background-color: #0C1220;
+            color: #C8F0FF;
+            border: 1px solid #00A8C8;
+            padding: 4px 8px;
+            border-radius: 3px;
+        }
+    """)
+    # === FIM DO TEMA ===
+
     window = MainWindow()
     app.aboutToQuit.connect(window.cleanup)
     window.show()
     sys.exit(app.exec())
 
-    # Start the Qt Loop
-    if (sys.flags.interactive != 1) or not hasattr(QtCore, "PYQT_VERSION"):
-        QApplication.instance().exec()
-        save_config(widgets)
 
 if __name__ == "__main__":
     main()
