@@ -67,7 +67,7 @@ Written by:
 ## Usage
 
 ### Binary Builds
-Binary builds for some platforms are available on the releases page: https://github.com/projecthorus/horus-gui/releases
+Binary builds for some platforms are available on the releases page: (https://github.com/PU2SWX/horus-gui-rtl/releases/tag/V0.1.0)
 
 Please let me know if you have issues!
 
