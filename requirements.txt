@@ -1,6 +1,6 @@
 numpy<2.4.0
 scipy
-pyrtlsdr
+pyrtlsdr==0.2.93
 pyaudio
 PyQt6
 pyqtgraph
