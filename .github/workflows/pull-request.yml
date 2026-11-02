@@ -33,12 +33,60 @@ jobs:
           run: pip install pyinstaller
 
         - name: Prep file locations
-          shell: bash
+          shell: pwsh
           run: |
-            mkdir -p dist
-            cp "C:\Program Files\Git\mingw64\bin\libgcc_s_seh-1.dll" .
-            cp "C:\Program Files\Git\mingw64\bin\libstdc++-6.dll" .
-            cp "C:\Program Files\Git\mingw64\bin\libwinpthread-1.dll" .
+            New-Item -ItemType Directory -Force -Path dist | Out-Null
+
+            $dlls = @(
+                "libgcc_s_seh-1.dll",
+                "libstdc++-6.dll",
+                "libwinpthread-1.dll"
+            )
+
+            $roots = @(
+                "$env:ProgramFiles\Git",
+                "C:\Strawberry",
+                "C:\ProgramData\chocolatey\lib\mingw"
+            )
+
+            $sourceDir = $null
+
+            foreach ($root in $roots) {
+                if (Test-Path $root) {
+                    $files = Get-ChildItem -Path $root -Filter "libgcc_s_seh-1.dll" -File -Recurse -ErrorAction SilentlyContinue
+
+                    foreach ($file in $files) {
+                        $dir = $file.DirectoryName
+
+                        $complete = $true
+                        foreach ($dll in $dlls) {
+                            if (-not (Test-Path (Join-Path $dir $dll))) {
+                                $complete = $false
+                                break
+                            }
+                        }
+
+                        if ($complete) {
+                            $sourceDir = $dir
+                            break
+                        }
+                    }
+                }
+
+                if ($sourceDir) {
+                    break
+                }
+            }
+
+            if (-not $sourceDir) {
+                throw "Could not locate all required MinGW DLL files."
+            }
+
+            Write-Host "DLL source directory: $sourceDir"
+
+            foreach ($dll in $dlls) {
+                Copy-Item (Join-Path $sourceDir $dll) .
+            }
 
         - name: Run pyinstaller
           run: pyinstaller horus-gui_win.spec
